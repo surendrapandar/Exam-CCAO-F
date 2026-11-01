@@ -1,0 +1,798 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>CCAO-F Mock Lab</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Source+Sans+3:wght@400;600;700&family=JetBrains+Mono:wght@500;700&display=swap">
+<style>
+/* Layout: exam-room console — sticky timer bar on top, question sheet + answer grid side panel; dashboard is a single column of summary → trend → history. */
+:root {
+  --bg: #f3f5f8;
+  --surface: #ffffff;
+  --ink: #142033;
+  --muted: #5b6b80;
+  --line: #d9e0ea;
+  --accent: #1f5fd1;
+  --accent-soft: #e4ecfb;
+  --good: #137a4b;
+  --good-soft: #e1f4ea;
+  --warn: #b26a00;
+  --warn-soft: #fff1d9;
+  --bad: #c0362c;
+  --bad-soft: #fde7e5;
+  --flag: #8a4fd1;
+  --display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --body: "Source Sans 3", "Segoe UI", system-ui, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+  --radius: 10px;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0e1520; --surface: #162131; --ink: #e6edf7; --muted: #93a3b8; --line: #2a3a50;
+  --accent: #6c9cf2; --accent-soft: #1d2f4d; --good: #4fc68b; --good-soft: #143326;
+  --warn: #f0b04a; --warn-soft: #3a2a10; --bad: #f07a70; --bad-soft: #3d1a18; --flag: #b98af0;
+  color-scheme: dark;
+} }
+:root[data-theme="dark"] {
+  --bg: #0e1520; --surface: #162131; --ink: #e6edf7; --muted: #93a3b8; --line: #2a3a50;
+  --accent: #6c9cf2; --accent-soft: #1d2f4d; --good: #4fc68b; --good-soft: #143326;
+  --warn: #f0b04a; --warn-soft: #3a2a10; --bad: #f07a70; --bad-soft: #3d1a18; --flag: #b98af0;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font-family: var(--body); font-size: 16px; line-height: 1.5; }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--surface); }
+h1, h2, h3 { font-family: var(--display); text-wrap: balance; margin: 0; line-height: 1.15; }
+button { font: inherit; cursor: pointer; }
+button:focus-visible, [tabindex]:focus-visible, input:focus-visible, select:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.wrap { max-width: 1120px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+.num { font-variant-numeric: tabular-nums; }
+.label { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 700; }
+.btn { border: 1px solid var(--line); background: var(--surface); color: var(--ink); padding: 10px 16px; border-radius: 8px; font-weight: 600; }
+.btn:hover { border-color: var(--accent); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn.primary:hover { filter: brightness(1.08); }
+.btn.danger { color: var(--bad); }
+.btn.ghost { background: transparent; }
+.btn:disabled { opacity: .45; cursor: not-allowed; }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); }
+
+/* ---------- Top bar ---------- */
+.topbar { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 20; background: var(--surface); border-bottom: 1px solid var(--line); }
+.topbar .wrap { display: flex; align-items: center; gap: 16px; padding-block: 10px; flex-wrap: wrap; }
+.brand { font-family: var(--display); font-weight: 700; font-size: 18px; display: flex; align-items: center; gap: 10px; }
+.brand .tag { font-family: var(--mono); font-size: 11px; padding: 2px 6px; border-radius: 4px; background: var(--accent-soft); color: var(--accent); }
+.spacer { flex: 1; }
+
+/* ---------- Timer ---------- */
+.timer { display: flex; align-items: center; gap: 12px; padding: 6px 14px; border-radius: 10px; background: var(--accent-soft); border: 2px solid transparent; }
+.timer .t { font-family: var(--mono); font-weight: 700; font-size: 30px; letter-spacing: .02em; line-height: 1; }
+.timer .tl { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 700; line-height: 1.2; }
+.timer.warn { background: var(--warn-soft); border-color: var(--warn); color: var(--warn); }
+.timer.crit { background: var(--bad-soft); border-color: var(--bad); color: var(--bad); animation: pulse 1s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .timer.crit { animation: none; } }
+@keyframes pulse { 50% { box-shadow: 0 0 0 6px color-mix(in srgb, var(--bad) 20%, transparent); } }
+.timebar { height: 4px; background: var(--line); }
+.timebar > div { height: 100%; background: var(--accent); transition: width .5s linear; }
+.timebar.warn > div { background: var(--warn); }
+.timebar.crit > div { background: var(--bad); }
+
+/* ---------- Dashboard ---------- */
+.hero { padding-block: 32px 8px; display: grid; grid-template-columns: 1.4fr 1fr; gap: 24px; align-items: start; }
+.hero h1 { font-size: clamp(28px, 4.5vw, 44px); }
+.hero p { color: var(--muted); max-width: 60ch; margin: 10px 0 0; }
+.facts { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0; }
+.facts div { padding: 14px 16px; border-bottom: 1px solid var(--line); }
+.facts div:nth-child(odd) { border-right: 1px solid var(--line); }
+.facts div:nth-last-child(-n+2) { border-bottom: 0; }
+.facts b { display: block; font-family: var(--mono); font-size: 22px; }
+.actions { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 20px; }
+.actions .btn.primary { padding: 14px 22px; font-size: 17px; }
+section.block { padding-block: 20px; }
+section.block > h2 { font-size: 22px; margin-bottom: 12px; }
+.stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+.stat { padding: 14px 16px; }
+.stat b { display: block; font-family: var(--mono); font-size: 26px; margin-top: 4px; }
+.stat small { color: var(--muted); }
+.chart-box { padding: 16px; overflow-x: auto; }
+.chart-box svg { display: block; width: 100%; min-width: 520px; height: auto; }
+.two { display: grid; grid-template-columns: 1.3fr 1fr; gap: 16px; }
+.two > * { min-width: 0; }
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 15px; }
+th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+th { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+tr:last-child td { border-bottom: 0; }
+.pill { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 13px; font-weight: 700; }
+.pill.pass { background: var(--good-soft); color: var(--good); }
+.pill.fail { background: var(--bad-soft); color: var(--bad); }
+.pill.neutral { background: var(--accent-soft); color: var(--accent); }
+.dombar { display: grid; grid-template-columns: minmax(0, 1fr) 140px 52px; gap: 10px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
+.dombar:last-child { border-bottom: 0; }
+.dombar .track { height: 10px; border-radius: 5px; background: var(--line); position: relative; overflow: hidden; }
+.dombar .track span { position: absolute; inset: 0 auto 0 0; border-radius: 5px; }
+.dombar .track i { position: absolute; top: -2px; bottom: -2px; left: 72%; width: 2px; background: var(--ink); opacity: .5; }
+.empty { padding: 28px; text-align: center; color: var(--muted); }
+
+/* ---------- Exam ---------- */
+.exam { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 20px; padding-block: 20px 40px; }
+.qcard { padding: 24px; }
+.qmeta { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 14px; }
+.qtext { font-size: 19px; line-height: 1.55; margin: 0 0 6px; white-space: pre-line; }
+.qhint { font-size: 14px; font-weight: 700; color: var(--accent); margin-bottom: 14px; }
+.opts { display: grid; gap: 10px; }
+.opt { display: grid; grid-template-columns: 34px minmax(0, 1fr); gap: 12px; align-items: start; text-align: left; padding: 12px 14px; border: 1.5px solid var(--line); border-radius: 10px; background: var(--surface); color: var(--ink); font-size: 16px; }
+.opt:hover { border-color: var(--accent); }
+.opt .k { width: 30px; height: 30px; border-radius: 50%; border: 1.5px solid var(--line); display: grid; place-items: center; font-family: var(--mono); font-weight: 700; font-size: 14px; }
+.opt.multi .k { border-radius: 6px; }
+.opt.sel { border-color: var(--accent); background: var(--accent-soft); }
+.opt.sel .k { background: var(--accent); border-color: var(--accent); color: #fff; }
+.opt.right { border-color: var(--good); background: var(--good-soft); }
+.opt.right .k { background: var(--good); border-color: var(--good); color: #fff; }
+.opt.wrong { border-color: var(--bad); background: var(--bad-soft); }
+.opt.wrong .k { background: var(--bad); border-color: var(--bad); color: #fff; }
+.qnav { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 20px; align-items: center; }
+.expl { margin-top: 16px; padding: 14px 16px; border-radius: 10px; background: var(--accent-soft); font-size: 15px; }
+.side { padding: 16px; position: sticky; top: calc(env(safe-area-inset-top, 0px) + 90px); align-self: start; }
+.grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; margin: 12px 0; }
+.grid button { aspect-ratio: 1; max-width: 100%; border: 1.5px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--ink); font-family: var(--mono); font-size: 13px; font-weight: 700; position: relative; padding: 0; }
+.grid button.ans { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+.grid button.cur { outline: 2.5px solid var(--ink); outline-offset: 1px; }
+.grid button.flag::after { content: ""; position: absolute; top: 2px; right: 2px; width: 7px; height: 7px; border-radius: 50%; background: var(--flag); }
+.grid button.r { background: var(--good-soft); border-color: var(--good); color: var(--good); }
+.grid button.w { background: var(--bad-soft); border-color: var(--bad); color: var(--bad); }
+.legend { display: flex; flex-wrap: wrap; gap: 10px 14px; font-size: 13px; color: var(--muted); }
+.legend span::before { content: ""; display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; border: 1.5px solid var(--line); }
+.legend .l-ans::before { background: var(--accent-soft); border-color: var(--accent); }
+.legend .l-flag::before { background: var(--flag); border-color: var(--flag); border-radius: 50%; }
+.progress-line { display: flex; justify-content: space-between; font-size: 14px; color: var(--muted); }
+.flagbtn.on { color: var(--flag); border-color: var(--flag); }
+
+/* ---------- Results ---------- */
+.result-hero { padding: 28px; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 28px; align-items: center; margin-top: 24px; }
+.ring { width: 160px; height: 160px; }
+.verdict { font-family: var(--display); font-size: clamp(30px, 5vw, 46px); font-weight: 700; }
+.verdict.pass { color: var(--good); }
+.verdict.fail { color: var(--bad); }
+.kv { display: flex; gap: 24px; flex-wrap: wrap; margin-top: 12px; }
+.kv div b { display: block; font-family: var(--mono); font-size: 22px; }
+.filters { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+.filters .btn.on { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.review-item { padding: 18px 20px; margin-bottom: 12px; }
+.review-item .qtext { font-size: 17px; }
+.your { font-size: 14px; margin-top: 10px; color: var(--muted); }
+
+/* ---------- Modal ---------- */
+.modal { position: fixed; inset: 0; z-index: 50; background: color-mix(in srgb, var(--ink) 45%, transparent); display: grid; place-items: center; padding: 16px; }
+.modal .panel { max-width: 460px; width: 100%; padding: 24px; }
+.modal h3 { font-size: 22px; margin-bottom: 8px; }
+.modal p { color: var(--muted); margin: 0 0 18px; }
+.modal .row { display: flex; gap: 10px; justify-content: flex-end; flex-wrap: wrap; }
+.field { display: grid; gap: 6px; margin-bottom: 14px; }
+.field select, .field input { padding: 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); font: inherit; }
+.check { display: flex; gap: 8px; align-items: center; margin-bottom: 14px; }
+
+@media (max-width: 860px) {
+  .hero, .two { grid-template-columns: 1fr; }
+  .stats { grid-template-columns: repeat(2, 1fr); }
+  .exam { grid-template-columns: 1fr; }
+  .side { position: static; order: 2; }
+  .grid { grid-template-columns: repeat(10, 1fr); }
+  .result-hero { grid-template-columns: 1fr; justify-items: start; }
+  .timer .t { font-size: 24px; }
+}
+@media (max-width: 480px) {
+  .grid { grid-template-columns: repeat(6, 1fr); }
+  .qcard { padding: 18px; }
+  .dombar { grid-template-columns: minmax(0, 1fr) 80px 46px; }
+  .brand .name { display: none; }
+}
+</style>
+</head>
+<body>
+
+<div id="app"></div>
+
+<script src="questions/d1a.js"></script>
+<script src="questions/d1b.js"></script>
+<script src="questions/d2a.js"></script>
+<script src="questions/d2b.js"></script>
+<script src="questions/d2c.js"></script>
+<script src="questions/d3a.js"></script>
+<script src="questions/d3b.js"></script>
+<script src="questions/d4a.js"></script>
+<script src="questions/d4b.js"></script>
+<script src="questions/d5a.js"></script>
+<script src="questions/d5b.js"></script>
+<script src="questions/d6a.js"></script>
+<script src="questions/d6b.js"></script>
+<script src="questions/d7.js"></script>
+<script src="questions/x_extra.js"></script>
+<script>
+(function () {
+"use strict";
+
+// ---------------- Exam blueprint (CCAO-F, July 2026 guide) ----------------
+const DOMAINS = {
+  1: { name: "Prompting & Task Execution", weight: 14, quota: 8 },
+  2: { name: "Output Evaluation & Validation", weight: 21, quota: 13 },
+  3: { name: "Product & Model Selection", weight: 12, quota: 7 },
+  4: { name: "Workflow Integration & Solution Design", weight: 16, quota: 10 },
+  5: { name: "Configuration & Knowledge Management", weight: 12, quota: 7 },
+  6: { name: "Governance, Risk & Responsible Use", weight: 15, quota: 9 },
+  7: { name: "Troubleshooting & Optimization", weight: 10, quota: 6 },
+};
+const EXAM_QUESTIONS = 60;
+const EXAM_MINUTES = 120;
+const PASS_PCT = 72;
+const KEYS = { history: "ccaof.history.v1", seen: "ccaof.seen.v1", active: "ccaof.active.v1" };
+
+// ---------------- Question bank ----------------
+// Each domain file calls CCAOF.add(domain, [[question, options, answer, explanation], ...]).
+// answer is an index, or an array of indices for multiple-response items.
+const BANK = [];
+const BY_ID = {};
+const counters = {};
+(window.CCAOF_RAW || []).forEach(([d, list]) => {
+  list.forEach(row => {
+    const [q, o, a, e] = row;
+    counters[d] = (counters[d] || 0) + 1;
+    const item = { id: "d" + d + "-" + counters[d], d, q, o, a: Array.isArray(a) ? a.slice().sort() : [a], e: e || "" };
+    BANK.push(item);
+    BY_ID[item.id] = item;
+  });
+});
+
+// ---------------- Storage (always guarded) ----------------
+function load(key, fallback) {
+  try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback; } catch (_) { return fallback; }
+}
+function save(key, val) {
+  try { localStorage.setItem(key, JSON.stringify(val)); return true; } catch (_) { return false; }
+}
+function drop(key) { try { localStorage.removeItem(key); } catch (_) {} }
+
+// ---------------- Helpers ----------------
+const $app = document.getElementById("app");
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+function shuffle(arr) { const a = arr.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
+function fmtClock(sec) {
+  sec = Math.max(0, Math.ceil(sec));
+  const h = Math.floor(sec / 3600), m = Math.floor(sec % 3600 / 60), s = sec % 60;
+  return (h ? h + ":" + String(m).padStart(2, "0") : String(m).padStart(2, "0")) + ":" + String(s).padStart(2, "0");
+}
+function fmtDur(sec) { const m = Math.floor(sec / 60), s = Math.round(sec % 60); return m + "m " + String(s).padStart(2, "0") + "s"; }
+function fmtDate(ts) { return new Date(ts).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }); }
+function fmtTime(ts) { return new Date(ts).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" }); }
+function dayKey(ts) { const d = new Date(ts); return d.getFullYear() + "-" + (d.getMonth() + 1) + "-" + d.getDate(); }
+const LETTERS = "ABCDEFGH";
+function sameSet(a, b) { if (a.length !== b.length) return false; const s = a.slice().sort((x, y) => x - y), t = b.slice().sort((x, y) => x - y); return s.every((v, i) => v === t[i]); }
+
+// ---------------- Question selection ----------------
+// Fill each domain quota with never-seen questions first, then least-seen, so six+ mocks rarely repeat.
+function pickQuestions(quotas) {
+  const seen = load(KEYS.seen, {});
+  let picked = [];
+  Object.keys(quotas).forEach(d => {
+    const pool = shuffle(BANK.filter(q => q.d === +d));
+    pool.sort((a, b) => (seen[a.id] || 0) - (seen[b.id] || 0));
+    picked = picked.concat(pool.slice(0, quotas[d]));
+  });
+  return shuffle(picked);
+}
+function buildSession(mode, questions, opts) {
+  return {
+    mode, // "mock" | "drill"
+    label: opts.label || "",
+    qids: questions.map(q => q.id),
+    order: questions.map(q => shuffle(q.o.map((_, i) => i))), // displayed position -> original index
+    answers: questions.map(() => []), // original option indices
+    flags: questions.map(() => false),
+    checked: questions.map(() => false),
+    cur: 0,
+    startedAt: Date.now(),
+    endAt: opts.minutes ? Date.now() + opts.minutes * 60000 : null,
+    minutes: opts.minutes || null,
+    instant: !!opts.instant,
+  };
+}
+
+// ---------------- App state ----------------
+let session = load(KEYS.active, null);
+if (session && !session.qids.every(id => BY_ID[id])) { session = null; drop(KEYS.active); }
+let view = session ? "exam" : "home";
+let lastResult = null;
+let reviewFilter = "all";
+let tickHandle = null;
+let modal = null;
+
+function persist() { if (session) save(KEYS.active, session); }
+
+// ---------------- Rendering ----------------
+function render() {
+  clearInterval(tickHandle); tickHandle = null;
+  if (view === "exam" && session) renderExam();
+  else if (view === "result" && lastResult) renderResult(lastResult);
+  else { view = "home"; renderHome(); }
+  renderModal();
+}
+
+function topbar(inner) {
+  return `<header class="topbar"><div class="wrap">
+    <div class="brand"><span class="tag">CCAO-F</span><span class="name">Mock Lab</span></div>
+    <div class="spacer"></div>${inner || ""}</div></header>`;
+}
+
+// ---- Home / dashboard ----
+function renderHome() {
+  const hist = load(KEYS.history, []);
+  const mocks = hist.filter(h => h.mode === "mock");
+  const seen = load(KEYS.seen, {});
+  const seenCount = BANK.filter(q => seen[q.id]).length;
+  const best = mocks.length ? Math.max(...mocks.map(m => m.pct)) : null;
+  const avg = mocks.length ? mocks.reduce((s, m) => s + m.pct, 0) / mocks.length : null;
+  const last = mocks.length ? mocks[mocks.length - 1] : null;
+  const passes = mocks.filter(m => m.passed).length;
+
+  // Day number = which distinct study day this mock was taken on (Day 1 = first day you took a mock).
+  const days = [];
+  mocks.forEach(m => { const k = dayKey(m.finishedAt); if (!days.includes(k)) days.push(k); });
+
+  $app.innerHTML = topbar(`<span class="label num">${BANK.length} questions in bank</span>`) + `
+  <main class="wrap">
+    <div class="hero">
+      <div>
+        <div class="label">Claude Certified Associate – Foundations</div>
+        <h1>Sit a full-length mock under real exam conditions.</h1>
+        <p>Every mock draws ${EXAM_QUESTIONS} fresh questions weighted by the official domain blueprint, prioritising questions you have not seen yet. The clock runs for ${EXAM_MINUTES} minutes and submits automatically at zero. Your results stay in this browser.</p>
+        <div class="actions">
+          <button class="btn primary" id="startMock">Start Mock #${mocks.length + 1}</button>
+          <button class="btn" id="startDrill">Domain drill</button>
+        </div>
+      </div>
+      <div class="panel facts">
+        <div><span class="label">Questions</span><b class="num">${EXAM_QUESTIONS}</b></div>
+        <div><span class="label">Time limit</span><b class="num">${EXAM_MINUTES} min</b></div>
+        <div><span class="label">Pass mark</span><b class="num">${PASS_PCT}%</b><small style="color:var(--muted)">≈ 720 / 1000 scaled</small></div>
+        <div><span class="label">To pass</span><b class="num">${Math.ceil(EXAM_QUESTIONS * PASS_PCT / 100)} / ${EXAM_QUESTIONS}</b><small style="color:var(--muted)">correct answers</small></div>
+      </div>
+    </div>
+
+    <section class="block">
+      <h2>Your progress</h2>
+      <div class="stats">
+        <div class="panel stat"><span class="label">Mocks taken</span><b class="num">${mocks.length}</b><small>${passes} passed</small></div>
+        <div class="panel stat"><span class="label">Last score</span><b class="num" style="color:${last ? (last.passed ? "var(--good)" : "var(--bad)") : "inherit"}">${last ? last.pct.toFixed(1) + "%" : "–"}</b><small>${last ? last.correct + "/" + last.total + " correct" : "No mocks yet"}</small></div>
+        <div class="panel stat"><span class="label">Best score</span><b class="num">${best !== null ? best.toFixed(1) + "%" : "–"}</b><small>${avg !== null ? "Average " + avg.toFixed(1) + "%" : "Pass mark " + PASS_PCT + "%"}</small></div>
+        <div class="panel stat"><span class="label">Bank covered</span><b class="num">${Math.round(seenCount / Math.max(1, BANK.length) * 100)}%</b><small>${seenCount} of ${BANK.length} seen</small></div>
+      </div>
+    </section>
+
+    <section class="block">
+      <h2>Score trend</h2>
+      <div class="panel chart-box">${mocks.length ? trendChart(mocks, days) : `<div class="empty">Your score for each mock will be plotted here against the ${PASS_PCT}% pass line. Take Mock #1 to start the chart.</div>`}</div>
+    </section>
+
+    <section class="block two">
+      <div>
+        <h2>Mock history</h2>
+        <div class="panel table-wrap">${mocks.length ? historyTable(mocks, days) : `<div class="empty">No mocks recorded yet.</div>`}</div>
+      </div>
+      <div>
+        <h2>Domain strength</h2>
+        <div class="panel" style="padding:8px 16px">${domainBars(aggregateDomains(mocks))}</div>
+        <p style="color:var(--muted);font-size:13px;margin:8px 0 0">Average across all mocks. The marker on each bar is the ${PASS_PCT}% line.</p>
+      </div>
+    </section>
+
+    <section class="block" style="padding-bottom:48px">
+      <div style="display:flex;gap:10px;flex-wrap:wrap">
+        <button class="btn" id="exportData">Save progress backup</button>
+        <button class="btn" id="importData">Restore from backup</button>
+        <input type="file" id="importFile" accept="application/json,.json" hidden>
+        <span class="spacer"></span>
+        <button class="btn ghost" id="resetSeen">Reset seen-question tracking</button>
+        <button class="btn ghost danger" id="resetAll">Delete all my data</button>
+      </div>
+    </section>
+  </main>`;
+
+  document.getElementById("startMock").onclick = () => openModal("startMock");
+  document.getElementById("startDrill").onclick = () => openModal("drill");
+  document.getElementById("resetSeen").onclick = () => openModal("resetSeen");
+  document.getElementById("resetAll").onclick = () => openModal("resetAll");
+  document.getElementById("exportData").onclick = () => {
+    const data = { app: "ccaof-mock-lab", version: 1, exportedAt: new Date().toISOString(), history: load(KEYS.history, []), seen: load(KEYS.seen, {}) };
+    const url = URL.createObjectURL(new Blob([JSON.stringify(data)], { type: "application/json" }));
+    const a = document.createElement("a");
+    a.href = url; a.download = "ccaof-progress-" + new Date().toISOString().slice(0, 10) + ".json";
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
+  const importFile = document.getElementById("importFile");
+  document.getElementById("importData").onclick = () => importFile.click();
+  importFile.onchange = () => {
+    const f = importFile.files[0]; if (!f) return;
+    f.text().then(txt => {
+      const data = JSON.parse(txt);
+      if (data.app !== "ccaof-mock-lab" || !Array.isArray(data.history)) throw new Error("bad file");
+      save(KEYS.history, data.history); save(KEYS.seen, data.seen || {});
+      modal = "imported"; render();
+    }).catch(() => { modal = "importFailed"; render(); });
+  };
+  $app.querySelectorAll("[data-review]").forEach(b => b.onclick = () => {
+    const h = load(KEYS.history, []).find(x => x.id === b.dataset.review);
+    if (h) { lastResult = h; reviewFilter = "all"; view = "result"; render(); window.scrollTo(0, 0); }
+  });
+}
+
+function trendChart(mocks, days) {
+  const W = 760, H = 260, L = 44, R = 20, T = 18, B = 40;
+  const n = mocks.length;
+  const x = i => n === 1 ? L + (W - L - R) / 2 : L + i * (W - L - R) / (n - 1);
+  const y = v => T + (100 - v) * (H - T - B) / 100;
+  let g = "";
+  [0, 25, 50, 75, 100].forEach(v => {
+    g += `<line x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}" stroke="var(--line)" stroke-width="1"/>`;
+    g += `<text x="${L - 8}" y="${y(v) + 4}" text-anchor="end" font-size="12" fill="var(--muted)" font-family="var(--mono)">${v}%</text>`;
+  });
+  g += `<line x1="${L}" x2="${W - R}" y1="${y(PASS_PCT)}" y2="${y(PASS_PCT)}" stroke="var(--good)" stroke-width="1.5" stroke-dasharray="6 5"/>`;
+  g += `<text x="${W - R}" y="${y(PASS_PCT) - 6}" text-anchor="end" font-size="12" font-weight="700" fill="var(--good)" font-family="var(--body)">Pass ${PASS_PCT}%</text>`;
+  const pts = mocks.map((m, i) => [x(i), y(m.pct)]);
+  if (n > 1) {
+    g += `<path d="M${pts[0][0]},${y(0)} ${pts.map(p => "L" + p[0] + "," + p[1]).join(" ")} L${pts[n - 1][0]},${y(0)} Z" fill="var(--accent)" opacity=".10"/>`;
+    g += `<polyline points="${pts.map(p => p.join(",")).join(" ")}" fill="none" stroke="var(--accent)" stroke-width="2.5" stroke-linejoin="round"/>`;
+  }
+  const step = Math.ceil(n / 12);
+  mocks.forEach((m, i) => {
+    const [px, py] = pts[i];
+    const col = m.passed ? "var(--good)" : "var(--bad)";
+    g += `<circle cx="${px}" cy="${py}" r="${i === n - 1 ? 6 : 4.5}" fill="${col}" stroke="var(--surface)" stroke-width="2"><title>Mock #${m.n} · Day ${days.indexOf(dayKey(m.finishedAt)) + 1}: ${m.pct.toFixed(1)}%</title></circle>`;
+    if (n <= 12 || i === n - 1) g += `<text x="${px}" y="${py - 11}" text-anchor="middle" font-size="12" font-weight="700" fill="var(--ink)" font-family="var(--mono)">${Math.round(m.pct)}</text>`;
+    if (i % step === 0 || i === n - 1) g += `<text x="${px}" y="${H - 14}" text-anchor="middle" font-size="12" fill="var(--muted)" font-family="var(--body)">#${m.n} · D${days.indexOf(dayKey(m.finishedAt)) + 1}</text>`;
+  });
+  return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Score per mock">${g}</svg>`;
+}
+
+function historyTable(mocks, days) {
+  const rows = mocks.slice().reverse().map(m => `<tr>
+    <td><b>Mock #${m.n}</b></td>
+    <td>Day ${days.indexOf(dayKey(m.finishedAt)) + 1}</td>
+    <td class="num">${fmtDate(m.finishedAt)} <span style="color:var(--muted)">${fmtTime(m.finishedAt)}</span></td>
+    <td class="num"><b>${m.pct.toFixed(1)}%</b></td>
+    <td class="num">${m.correct}/${m.total}</td>
+    <td class="num">${fmtDur(m.durationSec)}${m.timedOut ? " ⏱" : ""}</td>
+    <td><span class="pill ${m.passed ? "pass" : "fail"}">${m.passed ? "Pass" : "Fail"}</span></td>
+    <td><button class="btn" style="padding:4px 10px;font-size:13px" data-review="${m.id}">Review</button></td>
+  </tr>`).join("");
+  return `<table><thead><tr><th>Mock</th><th>Day</th><th>Date</th><th>Score</th><th>Correct</th><th>Time used</th><th>Result</th><th></th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+function aggregateDomains(list) {
+  const agg = {};
+  Object.keys(DOMAINS).forEach(d => agg[d] = { c: 0, t: 0 });
+  list.forEach(m => Object.keys(m.domains || {}).forEach(d => { agg[d].c += m.domains[d].c; agg[d].t += m.domains[d].t; }));
+  return agg;
+}
+function domainBars(agg) {
+  return Object.keys(DOMAINS).map(d => {
+    const a = agg[d], pct = a.t ? a.c / a.t * 100 : null;
+    const col = pct === null ? "var(--line)" : pct >= PASS_PCT ? "var(--good)" : pct >= 60 ? "var(--warn)" : "var(--bad)";
+    return `<div class="dombar"><div><b>D${d}</b> ${esc(DOMAINS[d].name)} <span style="color:var(--muted);font-size:12px">${DOMAINS[d].weight}%</span></div>
+      <div class="track"><span style="width:${pct || 0}%;background:${col}"></span><i></i></div>
+      <div class="num" style="text-align:right;font-weight:700">${pct === null ? "–" : Math.round(pct) + "%"}</div></div>`;
+  }).join("");
+}
+
+// ---- Exam ----
+function timeLeft() { return session.endAt ? (session.endAt - Date.now()) / 1000 : null; }
+function timerClass(left) { if (left === null) return ""; return left <= 300 ? "crit" : left <= 900 ? "warn" : ""; }
+
+function renderExam() {
+  const s = session, i = s.cur, q = BY_ID[s.qids[i]];
+  const multi = q.a.length > 1;
+  const answered = s.answers.filter(a => a.length).length;
+  const left = timeLeft();
+  const reveal = s.instant && s.checked[i];
+  const optsHtml = s.order[i].map((orig, pos) => {
+    const sel = s.answers[i].includes(orig);
+    let cls = "opt" + (multi ? " multi" : "") + (sel ? " sel" : "");
+    if (reveal) { if (q.a.includes(orig)) cls = "opt right" + (multi ? " multi" : ""); else if (sel) cls = "opt wrong" + (multi ? " multi" : ""); }
+    return `<button class="${cls}" data-opt="${orig}" ${reveal ? "disabled" : ""} aria-pressed="${sel}"><span class="k">${LETTERS[pos]}</span><span>${esc(q.o[orig])}</span></button>`;
+  }).join("");
+
+  const timerHtml = left !== null
+    ? `<div class="timer ${timerClass(left)}" id="timer" role="timer" aria-live="off"><div><div class="tl">Time left</div></div><span class="t num" id="clock">${fmtClock(left)}</span></div>`
+    : `<div class="timer"><div class="tl">Untimed drill</div></div>`;
+
+  $app.innerHTML = topbar(`
+      <span class="label num" style="text-transform:none;letter-spacing:0;font-size:14px">${s.mode === "mock" ? esc(s.label) : "Domain drill"} · ${answered}/${s.qids.length} answered</span>
+      ${timerHtml}
+      <button class="btn primary" id="submitBtn">${s.mode === "mock" ? "Submit exam" : "Finish"}</button>`) +
+    (left !== null ? `<div class="timebar ${timerClass(left)}" id="timebar"><div style="width:${Math.max(0, left / (s.minutes * 60) * 100)}%"></div></div>` : "") + `
+  <main class="wrap exam">
+    <div class="panel qcard">
+      <div class="qmeta">
+        <span class="label num">Question ${i + 1} of ${s.qids.length}</span>
+        <span class="pill neutral">D${q.d} · ${esc(DOMAINS[q.d].name)}</span>
+      </div>
+      <p class="qtext">${esc(q.q)}</p>
+      <div class="qhint">${multi ? "Select " + ["", "ONE", "TWO", "THREE", "FOUR"][q.a.length] + " answers." : "Select ONE answer."}</div>
+      <div class="opts">${optsHtml}</div>
+      ${reveal ? `<div class="expl"><b>${sameSet(s.answers[i], q.a) ? "Correct." : "Not quite."}</b> ${esc(q.e)}</div>` : ""}
+      <div class="qnav">
+        <button class="btn" id="prev" ${i === 0 ? "disabled" : ""}>← Previous</button>
+        ${s.instant && !reveal ? `<button class="btn primary" id="check" ${s.answers[i].length ? "" : "disabled"}>Check answer</button>` : ""}
+        <button class="btn ${s.instant && !reveal ? "" : "primary"}" id="next" ${i === s.qids.length - 1 ? "disabled" : ""}>Next →</button>
+        <div class="spacer"></div>
+        <button class="btn flagbtn ${s.flags[i] ? "on" : ""}" id="flag">${s.flags[i] ? "★ Flagged" : "☆ Flag for review"}</button>
+      </div>
+    </div>
+    <aside class="panel side">
+      <div class="progress-line"><span>Answered <b class="num">${answered}</b></span><span>Flagged <b class="num">${s.flags.filter(Boolean).length}</b></span><span>Left <b class="num">${s.qids.length - answered}</b></span></div>
+      <div class="grid">${s.qids.map((id, k) => {
+        let c = s.answers[k].length ? "ans" : "";
+        if (s.instant && s.checked[k]) c = sameSet(s.answers[k], BY_ID[id].a) ? "r" : "w";
+        return `<button class="${c} ${s.flags[k] ? "flag" : ""} ${k === i ? "cur" : ""}" data-go="${k}" aria-label="Question ${k + 1}">${k + 1}</button>`;
+      }).join("")}</div>
+      <div class="legend"><span class="l-ans">Answered</span><span>Not answered</span><span class="l-flag">Flagged</span></div>
+      <p style="font-size:13px;color:var(--muted);margin:14px 0 0">Keys: <b>A–E</b> choose · <b>←/→</b> move · <b>F</b> flag</p>
+    </aside>
+  </main>`;
+
+  $app.querySelectorAll("[data-opt]").forEach(b => b.onclick = () => choose(+b.dataset.opt));
+  $app.querySelectorAll("[data-go]").forEach(b => b.onclick = () => go(+b.dataset.go));
+  document.getElementById("prev").onclick = () => go(i - 1);
+  document.getElementById("next").onclick = () => go(i + 1);
+  document.getElementById("flag").onclick = toggleFlag;
+  const chk = document.getElementById("check");
+  if (chk) chk.onclick = () => { s.checked[i] = true; persist(); render(); };
+  document.getElementById("submitBtn").onclick = () => openModal("submit");
+  if (left !== null) { tickHandle = setInterval(tick, 250); }
+}
+
+function tick() {
+  if (!session || !session.endAt) return;
+  const left = timeLeft();
+  if (left <= 0) { finish(true); return; }
+  const clock = document.getElementById("clock");
+  if (clock) clock.textContent = fmtClock(left);
+  const cls = timerClass(left);
+  const t = document.getElementById("timer"); if (t) t.className = "timer " + cls;
+  const tb = document.getElementById("timebar");
+  if (tb) { tb.className = "timebar " + cls; tb.firstElementChild.style.width = Math.max(0, left / (session.minutes * 60) * 100) + "%"; }
+}
+
+function choose(orig) {
+  const s = session, i = s.cur, q = BY_ID[s.qids[i]];
+  if (s.instant && s.checked[i]) return;
+  if (q.a.length > 1) {
+    const cur = s.answers[i];
+    if (cur.includes(orig)) s.answers[i] = cur.filter(x => x !== orig);
+    else if (cur.length < q.a.length) s.answers[i] = cur.concat(orig);
+    else s.answers[i] = cur.slice(1).concat(orig); // replace oldest when over the limit
+  } else {
+    s.answers[i] = [orig];
+  }
+  persist(); render();
+}
+function go(k) { if (k < 0 || k >= session.qids.length) return; session.cur = k; persist(); render(); window.scrollTo({ top: 0 }); }
+function toggleFlag() { session.flags[session.cur] = !session.flags[session.cur]; persist(); render(); }
+
+function finish(timedOut) {
+  const s = session; if (!s) return;
+  clearInterval(tickHandle);
+  const now = Date.now();
+  const hist = load(KEYS.history, []);
+  const seen = load(KEYS.seen, {});
+  const domains = {};
+  let correct = 0;
+  const items = s.qids.map((id, k) => {
+    const q = BY_ID[id];
+    const ok = sameSet(s.answers[k], q.a);
+    if (ok) correct++;
+    domains[q.d] = domains[q.d] || { c: 0, t: 0 };
+    domains[q.d].t++; if (ok) domains[q.d].c++;
+    seen[id] = (seen[id] || 0) + 1;
+    return { id, sel: s.answers[k], order: s.order[k], ok, flag: s.flags[k] };
+  });
+  const total = s.qids.length;
+  const pct = total ? correct / total * 100 : 0;
+  const elapsed = s.endAt ? Math.min(s.minutes * 60, (now - s.startedAt) / 1000) : (now - s.startedAt) / 1000;
+  const result = {
+    id: "r" + now, mode: s.mode, label: s.label,
+    n: s.mode === "mock" ? hist.filter(h => h.mode === "mock").length + 1 : null,
+    startedAt: s.startedAt, finishedAt: now, durationSec: elapsed, timedOut: !!timedOut,
+    total, correct, pct, passed: pct >= PASS_PCT, domains, items,
+  };
+  hist.push(result);
+  if (!save(KEYS.history, hist)) {
+    // Storage full: drop per-question detail from the oldest attempts and retry.
+    hist.forEach((h, k) => { if (k < hist.length - 3) delete h.items; });
+    save(KEYS.history, hist);
+  }
+  save(KEYS.seen, seen);
+  drop(KEYS.active);
+  session = null;
+  lastResult = result;
+  reviewFilter = "all";
+  view = "result";
+  modal = timedOut ? "timeup" : null;
+  render();
+  window.scrollTo(0, 0);
+}
+
+// ---- Results ----
+function renderResult(r) {
+  const need = Math.ceil(r.total * PASS_PCT / 100);
+  const diff = r.correct - need;
+  const R = 66, C = 2 * Math.PI * R;
+  const ring = `<svg class="ring" viewBox="0 0 160 160" role="img" aria-label="Score ${r.pct.toFixed(1)} percent">
+    <circle cx="80" cy="80" r="${R}" fill="none" stroke="var(--line)" stroke-width="14"/>
+    <circle cx="80" cy="80" r="${R}" fill="none" stroke="${r.passed ? "var(--good)" : "var(--bad)"}" stroke-width="14" stroke-linecap="round"
+      stroke-dasharray="${C * r.pct / 100} ${C}" transform="rotate(-90 80 80)"/>
+    <line x1="80" y1="6" x2="80" y2="26" stroke="var(--ink)" stroke-width="2.5" transform="rotate(${PASS_PCT * 3.6} 80 80)"/>
+    <text x="80" y="84" text-anchor="middle" font-size="32" font-weight="700" fill="var(--ink)" font-family="var(--mono)">${Math.round(r.pct)}%</text>
+    <text x="80" y="106" text-anchor="middle" font-size="12" fill="var(--muted)" font-family="var(--body)">${r.correct} / ${r.total}</text>
+  </svg>`;
+  const items = r.items || [];
+  const list = items.filter(it => reviewFilter === "all" || (reviewFilter === "wrong" && !it.ok) || (reviewFilter === "right" && it.ok) || (reviewFilter === "flag" && it.flag));
+  const title = r.mode === "mock" ? "Mock #" + r.n : "Domain drill";
+
+  $app.innerHTML = topbar(`<button class="btn" id="home">← Dashboard</button>`) + `
+  <main class="wrap" style="padding-bottom:48px">
+    <div class="panel result-hero">
+      ${ring}
+      <div>
+        <div class="label">${esc(title)} · ${fmtDate(r.finishedAt)} ${fmtTime(r.finishedAt)}${r.timedOut ? " · auto-submitted at time-up" : ""}</div>
+        <div class="verdict ${r.passed ? "pass" : "fail"}">${r.passed ? "Pass" : "Below passing"}</div>
+        <div style="color:var(--muted)">${diff >= 0
+          ? `You scored <b style="color:var(--good)">${diff} question${diff === 1 ? "" : "s"} above</b> the pass line (${need}/${r.total}), ${(r.pct - PASS_PCT).toFixed(1)} points over ${PASS_PCT}%.`
+          : `You needed <b style="color:var(--bad)">${-diff} more correct answer${diff === -1 ? "" : "s"}</b> to reach the pass line (${need}/${r.total}).`}</div>
+        <div class="kv">
+          <div><span class="label">Correct</span><b class="num" style="color:var(--good)">${r.correct}</b></div>
+          <div><span class="label">Wrong / blank</span><b class="num" style="color:var(--bad)">${r.total - r.correct}</b></div>
+          <div><span class="label">Score</span><b class="num">${r.pct.toFixed(1)}%</b></div>
+          <div><span class="label">Time used</span><b class="num">${fmtDur(r.durationSec)}</b></div>
+          <div><span class="label">Avg / question</span><b class="num">${Math.round(r.durationSec / r.total)}s</b></div>
+        </div>
+      </div>
+    </div>
+
+    <section class="block">
+      <h2>By domain</h2>
+      <div class="panel" style="padding:8px 16px">${domainBars(Object.assign(aggregateDomains([]), r.domains))}</div>
+    </section>
+
+    <section class="block">
+      <h2>Answer review</h2>
+      ${items.length ? `<div class="filters">
+        ${[["all", "All " + items.length], ["wrong", "Wrong " + items.filter(x => !x.ok).length], ["right", "Correct " + items.filter(x => x.ok).length], ["flag", "Flagged " + items.filter(x => x.flag).length]]
+          .map(([k, l]) => `<button class="btn ${reviewFilter === k ? "on" : ""}" data-f="${k}">${l}</button>`).join("")}
+      </div>
+      ${list.map(it => reviewItem(it, items.indexOf(it))).join("") || `<div class="panel empty">Nothing in this filter.</div>`}`
+      : `<div class="panel empty">Detailed answers for this older attempt were trimmed to save browser storage.</div>`}
+    </section>
+    <div class="actions"><button class="btn primary" id="again">Start another mock</button><button class="btn" id="home2">Back to dashboard</button></div>
+  </main>`;
+
+  document.getElementById("home").onclick = document.getElementById("home2").onclick = () => { view = "home"; render(); window.scrollTo(0, 0); };
+  document.getElementById("again").onclick = () => openModal("startMock");
+  $app.querySelectorAll("[data-f]").forEach(b => b.onclick = () => { reviewFilter = b.dataset.f; render(); });
+}
+
+function reviewItem(it, k) {
+  const q = BY_ID[it.id];
+  if (!q) return "";
+  const order = it.order || q.o.map((_, i) => i);
+  const opts = order.map((orig, pos) => {
+    const isAns = q.a.includes(orig), sel = it.sel.includes(orig);
+    const cls = "opt" + (q.a.length > 1 ? " multi" : "") + (isAns ? " right" : sel ? " wrong" : "");
+    return `<div class="${cls}"><span class="k">${LETTERS[pos]}</span><span>${esc(q.o[orig])}${sel ? ` <b style="font-size:13px">(your answer)</b>` : ""}</span></div>`;
+  }).join("");
+  return `<article class="panel review-item">
+    <div class="qmeta"><span class="label num">Q${k + 1}</span><span class="pill ${it.ok ? "pass" : "fail"}">${it.ok ? "Correct" : it.sel.length ? "Wrong" : "Not answered"}</span><span class="pill neutral">D${q.d} · ${esc(DOMAINS[q.d].name)}</span>${it.flag ? `<span class="pill" style="color:var(--flag)">★ Flagged</span>` : ""}</div>
+    <p class="qtext">${esc(q.q)}</p>
+    <div class="opts">${opts}</div>
+    <div class="expl"><b>Why:</b> ${esc(q.e)}</div>
+  </article>`;
+}
+
+// ---------------- Modals ----------------
+function openModal(name) { modal = name; renderModal(); }
+function closeModal() { modal = null; renderModal(); }
+function renderModal() {
+  let el = document.getElementById("modal");
+  if (!modal) { if (el) el.remove(); return; }
+  if (!el) { el = document.createElement("div"); el.id = "modal"; el.className = "modal"; document.body.appendChild(el); }
+  const mocks = load(KEYS.history, []).filter(h => h.mode === "mock");
+  let html = "";
+  if (modal === "startMock") {
+    html = `<h3>Start Mock #${mocks.length + 1}?</h3>
+      <p>${EXAM_QUESTIONS} questions · ${EXAM_MINUTES} minutes · pass at ${PASS_PCT}%. The timer starts immediately and keeps running if you close or refresh the page, like the real exam. It submits automatically at 00:00.</p>
+      <div class="row"><button class="btn" data-x>Cancel</button><button class="btn primary" id="go">Start the clock</button></div>`;
+  } else if (modal === "drill") {
+    html = `<h3>Domain drill</h3>
+      <p>Practise one domain with instant feedback after each question. Drills do not count toward your mock history.</p>
+      <div class="field"><label class="label" for="drillDomain">Domain</label><select id="drillDomain">
+        <option value="all">All domains (weighted)</option>
+        ${Object.keys(DOMAINS).map(d => `<option value="${d}">D${d} · ${esc(DOMAINS[d].name)} (${BANK.filter(q => q.d === +d).length})</option>`).join("")}
+      </select></div>
+      <div class="field"><label class="label" for="drillCount">Number of questions</label><select id="drillCount"><option>10</option><option selected>20</option><option>30</option><option>50</option></select></div>
+      <label class="check"><input type="checkbox" id="drillTimed"> Timed (2 minutes per question)</label>
+      <div class="row"><button class="btn" data-x>Cancel</button><button class="btn primary" id="go">Start drill</button></div>`;
+  } else if (modal === "submit") {
+    const s = session; const un = s.answers.filter(a => !a.length).length; const fl = s.flags.filter(Boolean).length;
+    html = `<h3>Submit and see your score?</h3>
+      <p>${un ? `<b style="color:var(--bad)">${un} question${un === 1 ? " is" : "s are"} unanswered.</b> Unanswered questions are marked wrong. ` : "All questions answered. "}${fl ? `${fl} flagged for review. ` : ""}${s.endAt ? fmtClock(timeLeft()) + " left on the clock." : ""}</p>
+      <div class="row"><button class="btn" data-x>Keep working</button><button class="btn primary" id="go">Submit</button></div>`;
+  } else if (modal === "timeup") {
+    html = `<h3>Time is up</h3><p>Your exam was submitted automatically at 00:00. Unanswered questions were counted as wrong.</p>
+      <div class="row"><button class="btn primary" data-x>See results</button></div>`;
+  } else if (modal === "imported") {
+    html = `<h3>Progress restored</h3><p>${mocks.length} mock${mocks.length === 1 ? "" : "s"} loaded from your backup file.</p>
+      <div class="row"><button class="btn primary" data-x>Done</button></div>`;
+  } else if (modal === "importFailed") {
+    html = `<h3>Couldn't read that file</h3><p>Choose a backup file saved from this app with "Save progress backup". It ends in .json.</p>
+      <div class="row"><button class="btn primary" data-x>OK</button></div>`;
+  } else if (modal === "resetSeen") {
+    html = `<h3>Reset seen questions?</h3><p>Future mocks will treat every question as new again. Your score history stays.</p>
+      <div class="row"><button class="btn" data-x>Cancel</button><button class="btn primary" id="go">Reset</button></div>`;
+  } else if (modal === "resetAll") {
+    html = `<h3>Delete all data?</h3><p>This removes every mock score, the progress chart and seen-question tracking from this browser. It cannot be undone.</p>
+      <div class="row"><button class="btn" data-x>Cancel</button><button class="btn primary" id="go" style="background:var(--bad);border-color:var(--bad)">Delete everything</button></div>`;
+  }
+  el.innerHTML = `<div class="panel" role="dialog" aria-modal="true">${html}</div>`;
+  el.onclick = e => { if (e.target === el && modal !== "timeup") closeModal(); };
+  el.querySelectorAll("[data-x]").forEach(b => b.onclick = closeModal);
+  const go = el.querySelector("#go");
+  if (go) { go.focus(); go.onclick = () => {
+    const m = modal; modal = null;
+    if (m === "startMock") {
+      const quotas = {}; Object.keys(DOMAINS).forEach(d => quotas[d] = DOMAINS[d].quota);
+      session = buildSession("mock", pickQuestions(quotas), { minutes: EXAM_MINUTES, label: "Mock #" + (mocks.length + 1) });
+      persist(); view = "exam"; render(); window.scrollTo(0, 0);
+    } else if (m === "drill") {
+      const d = el.querySelector("#drillDomain").value, n = +el.querySelector("#drillCount").value, timed = el.querySelector("#drillTimed").checked;
+      const quotas = {};
+      if (d === "all") { Object.keys(DOMAINS).forEach(k => quotas[k] = Math.max(1, Math.round(n * DOMAINS[k].weight / 100))); }
+      else quotas[d] = n;
+      let qs = pickQuestions(quotas);
+      if (qs.length < n) { // weighted rounding can fall short; top up from the least-seen remainder
+        const have = new Set(qs.map(q => q.id));
+        const pool = BANK.filter(q => !have.has(q.id) && (d === "all" || q.d === +d));
+        qs = qs.concat(shuffle(pool).slice(0, n - qs.length));
+      }
+      session = buildSession("drill", shuffle(qs).slice(0, n), { minutes: timed ? n * 2 : null, instant: true });
+      persist(); view = "exam"; render(); window.scrollTo(0, 0);
+    } else if (m === "submit") { finish(false); }
+    else if (m === "resetSeen") { drop(KEYS.seen); render(); }
+    else if (m === "resetAll") { drop(KEYS.seen); drop(KEYS.history); drop(KEYS.active); render(); }
+  }; } else { const x = el.querySelector("[data-x]"); if (x) x.focus(); }
+}
+
+// ---------------- Keyboard ----------------
+document.addEventListener("keydown", e => {
+  if (modal) { if (e.key === "Escape" && modal !== "timeup") closeModal(); return; }
+  if (view !== "exam" || !session || e.metaKey || e.ctrlKey || e.altKey) return;
+  if (e.target.matches("input, select, textarea")) return;
+  const k = e.key.toLowerCase();
+  const pos = LETTERS.toLowerCase().indexOf(k);
+  const order = session.order[session.cur];
+  if (pos >= 0 && pos < order.length && k !== "f") { choose(order[pos]); }
+  else if (k === "arrowright") go(session.cur + 1);
+  else if (k === "arrowleft") go(session.cur - 1);
+  else if (k === "f") toggleFlag();
+});
+
+// Keep the clock honest after the tab sleeps or the laptop lid closes.
+document.addEventListener("visibilitychange", () => { if (!document.hidden && view === "exam" && session && session.endAt) tick(); });
+
+// Resume an in-progress exam whose time already ran out while the page was closed.
+if (session && session.endAt && timeLeft() <= 0) finish(true); else render();
+})();
+</script>
+</body>
+</html>
